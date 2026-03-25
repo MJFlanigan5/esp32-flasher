@@ -1,0 +1,42 @@
+[
+  {
+    "name": "ESPHome (latest)",
+    "description": "Home automation firmware — configure via YAML",
+    "url": "https://esphome.io",
+    "chip": "ESP32",
+    "offset": "0x0",
+    "note": "Download .bin from ESPHome dashboard after compiling"
+  },
+  {
+    "name": "Tasmota",
+    "description": "Feature-rich open firmware for IoT devices",
+    "url": "https://tasmota.github.io/install/",
+    "chip": "ESP32",
+    "offset": "0x0",
+    "note": "Use Tasmota Web Installer for easiest install"
+  },
+  {
+    "name": "WLED",
+    "description": "LED strip controller with 100+ effects",
+    "url": "https://install.wled.me",
+    "chip": "ESP32",
+    "offset": "0x0",
+    "note": "Use WLED Web Installer or download .bin from GitHub releases"
+  },
+  {
+    "name": "MicroPython",
+    "description": "Run Python directly on your ESP32",
+    "url": "https://micropython.org/download/ESP32_GENERIC/",
+    "chip": "ESP32",
+    "offset": "0x1000",
+    "note": "Download from micropython.org — use generic ESP32 build"
+  },
+  {
+    "name": "Arduino OTA Loader",
+    "description": "Minimal firmware to enable Arduino OTA updates",
+    "url": "https://github.com/espressif/arduino-esp32",
+    "chip": "ESP32",
+    "offset": "0x0",
+    "note": "Compile your sketch in Arduino IDE and export .bin"
+  }
+]
