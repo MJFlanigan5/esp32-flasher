@@ -194,6 +194,29 @@
       border: 1px solid rgba(239,68,68,0.25);
     }
     .btn-danger:not(:disabled):hover { background: rgba(239,68,68,0.2); }
+    .btn-yellow {
+      background: rgba(245,158,11,0.15);
+      color: var(--yellow);
+      border: 1px solid rgba(245,158,11,0.35);
+    }
+    .btn-yellow:not(:disabled):hover { background: rgba(245,158,11,0.25); }
+    .demo-badge {
+      display: none;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: #000;
+      background: var(--yellow);
+      padding: 3px 10px;
+      border-radius: 4px;
+      letter-spacing: 0.08em;
+      animation: demo-pulse 1.8s ease-in-out infinite;
+    }
+    .demo-badge.visible { display: inline-block; }
+    @keyframes demo-pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.7; }
+    }
     .btn-sm { padding: 5px 10px; font-size: 11px; }
     .btn-full { width: 100%; }
 
@@ -611,7 +634,12 @@
     <span class="header-logo">⚡</span>
     <span class="header-title"><span>ESP32</span> Flasher</span>
   </div>
-  <span class="header-badge">Chrome / Edge required</span>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span class="demo-badge" id="demo-badge">DEMO MODE</span>
+    <button class="btn btn-yellow btn-sm" id="btn-demo">▶ Demo</button>
+    <button class="btn btn-danger btn-sm" id="btn-exit-demo" style="display:none">✕ Exit Demo</button>
+    <span class="header-badge">Chrome / Edge required</span>
+  </div>
 </header>
 
 <!-- Warnings -->
@@ -836,6 +864,8 @@ let monitorReader  = null;
 let monitorWriter  = null;
 let logLines       = 0;
 const MAX_LINES    = 500;
+let demoActive     = false;
+let demoTimers     = [];
 
 // ── DOM refs ──
 const $  = id => document.getElementById(id);
@@ -1120,6 +1150,10 @@ function setConnected(val) {
 
 // ── Flash ──
 function updateFlashButton() {
+  if (demoActive) {
+    // In demo mode, button is enabled once connected (managed by demo logic)
+    return;
+  }
   const isConnected = connDot.classList.contains('connected');
   const hasFirmware = (firmwareBuffer !== null) ||
     ($('tab-presets').classList.contains('active') && selectedPreset !== null);
@@ -1143,6 +1177,8 @@ btnFlash.addEventListener('click', flashFirmware);
 
 async function flashFirmware() {
   if (isFlashing) return;
+  // Demo mode: bypass real WebSerial path entirely
+  if (demoActive) { runDemoFlash(); return; }
   if (!espLoader) {
     setFlashStatus('Not connected to a device.', 'error');
     return;
@@ -1320,6 +1356,257 @@ function formatBytes(bytes) {
   const sizes = ['B','KB','MB','GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// ══════════════════════════════════════════════════════
+//  DEMO MODE
+// ══════════════════════════════════════════════════════
+
+const btnDemo     = $('btn-demo');
+const btnExitDemo = $('btn-exit-demo');
+const demoBadge   = $('demo-badge');
+
+function demoTimeout(fn, ms) {
+  const id = setTimeout(fn, ms);
+  demoTimers.push({ type: 'timeout', id });
+  return id;
+}
+function demoInterval(fn, ms) {
+  const id = setInterval(fn, ms);
+  demoTimers.push({ type: 'interval', id });
+  return id;
+}
+function clearDemoTimers() {
+  demoTimers.forEach(t => {
+    if (t.type === 'timeout')  clearTimeout(t.id);
+    if (t.type === 'interval') clearInterval(t.id);
+  });
+  demoTimers = [];
+}
+
+btnDemo.addEventListener('click', startDemo);
+btnExitDemo.addEventListener('click', exitDemo);
+
+function startDemo() {
+  if (demoActive) return;
+  demoActive = true;
+
+  // Show badge + exit button, hide demo start button
+  demoBadge.classList.add('visible');
+  btnDemo.style.display     = 'none';
+  btnExitDemo.style.display = '';
+
+  // Reset UI to clean state first
+  setConnected(false);
+  clearLog();
+  progressWrap.style.opacity = '0.3';
+  progressBar.style.width    = '0%';
+  progressPct.textContent    = '0%';
+  progressBytes.textContent  = '';
+  progressLabel.textContent  = 'Ready';
+  flashStatus.className      = 'flash-status';
+
+  addLog('> [DEMO] Starting demo sequence…', true, 'sys');
+
+  // ── Step 1: Simulate connect (1.5 s) ──
+  btnConnect.disabled = true;
+  btnConnect.innerHTML = '<span class="spinner"></span> Connecting…';
+
+  const flashLines = [
+    'esptool.js v0.5.7',
+    'Connecting...',
+    'Chip is ESP32-D0WDQ6 (revision v3.0)',
+    'Features: WiFi, BT, Dual Core, 240MHz, VRef cal in efuse',
+    'MAC: 24:6f:28:aa:bb:cc',
+    'Stub running...',
+    'Configuring flash size...',
+  ];
+  const eraseLines = ['Erasing flash... done in 3.8s'];
+  const writeLines = [
+    'Compressed 1048576 bytes to 652341...',
+    'Writing at 0x00000000... (12%)',
+    'Writing at 0x00020000... (25%)',
+    'Writing at 0x00040000... (37%)',
+    'Writing at 0x00060000... (50%)',
+    'Writing at 0x00080000... (62%)',
+    'Writing at 0x000a0000... (75%)',
+    'Writing at 0x000c0000... (87%)',
+    'Writing at 0x000e0000... (100%)',
+    'Wrote 1048576 bytes in 8.2s',
+    'Hash of data verified.',
+    'Hard resetting via RTS pin...',
+  ];
+  const bootLines = [
+    'ets Jun  8 2016 00:22:57',
+    'rst:0x1 (POWERON_RESET)',
+    'I (31) boot: ESP-IDF v5.1.2',
+    'I (56) cpu_start: Pro cpu start user code',
+    'I (63) heap_init: Initializing RAM...',
+    'I (70) app_start: Starting application...',
+    'I (312) wifi: wifi driver task started',
+    'I (318) system_api: Base MAC address set',
+    'Ready.',
+  ];
+
+  demoTimeout(() => {
+    if (!demoActive) return;
+
+    // Show connect lines
+    flashLines.forEach((line, i) => {
+      demoTimeout(() => { if (demoActive) addLog(line); }, i * 120);
+    });
+
+    demoTimeout(() => {
+      if (!demoActive) return;
+      // Populate chip info
+      chipName.textContent  = 'ESP32-D0WDQ6 (revision v3.0)';
+      chipFlash.textContent = '4MB';
+      chipMac.textContent   = '24:6F:28:AA:BB:CC';
+
+      setConnected(true);
+      addLog('> [DEMO] Connected. Ready to flash.', true, 'sys');
+
+      // Override Flash button enablement for demo — firmware not really loaded
+      btnFlash.disabled = false;
+
+    }, flashLines.length * 120 + 200);
+
+  }, 1500);
+}
+
+// ── Step 2: Demo flash (triggered when Flash button clicked in demo mode) ──
+// We intercept btnFlash click at the top of flashFirmware via demoActive flag.
+function runDemoFlash() {
+  if (!demoActive) return;
+
+  isFlashing = true;
+  btnFlash.disabled = true;
+  btnFlash.innerHTML = '<span class="spinner"></span> Flashing…';
+  progressWrap.style.opacity = '1';
+  progressBar.classList.remove('error');
+  progressBar.style.width   = '0%';
+  progressPct.textContent   = '0%';
+  progressBytes.textContent = '';
+  progressLabel.textContent = 'Starting…';
+  flashStatus.className     = 'flash-status';
+
+  const TOTAL = 1048576;
+
+  // Show erase message (0–1.5 s)
+  addLog('Erasing flash... done in 3.8s');
+  progressLabel.textContent = 'Erasing flash...';
+
+  demoTimeout(() => {
+    if (!demoActive) return;
+
+    addLog('Compressed 1048576 bytes to 652341...');
+    progressLabel.textContent = 'Writing…';
+
+    // Write lines timed to match progress steps
+    const writeLogLines = [
+      { line: 'Writing at 0x00000000... (12%)',  pct: 12  },
+      { line: 'Writing at 0x00020000... (25%)',  pct: 25  },
+      { line: 'Writing at 0x00040000... (37%)',  pct: 37  },
+      { line: 'Writing at 0x00060000... (50%)',  pct: 50  },
+      { line: 'Writing at 0x00080000... (62%)',  pct: 62  },
+      { line: 'Writing at 0x000a0000... (75%)',  pct: 75  },
+      { line: 'Writing at 0x000c0000... (87%)',  pct: 87  },
+      { line: 'Writing at 0x000e0000... (100%)', pct: 100 },
+    ];
+
+    const FLASH_DURATION = 8000;  // ms
+    const TICK           = 300;   // ms per progress update
+    const steps          = Math.floor(FLASH_DURATION / TICK);
+    let   tick           = 0;
+    let   logIdx         = 0;
+
+    const intervalId = demoInterval(() => {
+      if (!demoActive) return;
+      tick++;
+      const pct     = Math.min(Math.round((tick / steps) * 100), 100);
+      const written = Math.round((pct / 100) * TOTAL);
+      progressBar.style.width   = pct + '%';
+      progressPct.textContent   = pct + '%';
+      progressBytes.textContent = `${formatBytes(written)} / ${formatBytes(TOTAL)}`;
+
+      // Emit write log lines at the right percentages
+      while (logIdx < writeLogLines.length && pct >= writeLogLines[logIdx].pct) {
+        addLog(writeLogLines[logIdx].line);
+        logIdx++;
+      }
+
+      if (pct >= 100) {
+        clearInterval(intervalId);
+        // Remove from demoTimers so it's not double-cleared
+        const idx = demoTimers.findIndex(t => t.id === intervalId);
+        if (idx !== -1) demoTimers.splice(idx, 1);
+
+        demoTimeout(() => {
+          if (!demoActive) return;
+          addLog('Wrote 1048576 bytes in 8.2s');
+          addLog('Hash of data verified.');
+          addLog('Hard resetting via RTS pin...');
+
+          progressBar.style.width   = '100%';
+          progressPct.textContent   = '100%';
+          progressLabel.textContent = 'Done!';
+          setFlashStatus('Flash successful! Device is resetting.', 'success');
+
+          isFlashing = false;
+          btnFlash.disabled = true;   // keep disabled after success
+          btnFlash.innerHTML = '▶ Flash Firmware';
+
+          // ── Step 4: Boot output stream ──
+          const bootOutput = [
+            'ets Jun  8 2016 00:22:57',
+            'rst:0x1 (POWERON_RESET)',
+            'I (31) boot: ESP-IDF v5.1.2',
+            'I (56) cpu_start: Pro cpu start user code',
+            'I (63) heap_init: Initializing RAM...',
+            'I (70) app_start: Starting application...',
+            'I (312) wifi: wifi driver task started',
+            'I (318) system_api: Base MAC address set',
+            'Ready.',
+          ];
+          bootOutput.forEach((line, i) => {
+            demoTimeout(() => { if (demoActive) addLog(line); }, 800 + i * 350);
+          });
+
+        }, 300);
+      }
+    }, TICK);
+
+  }, 1500);
+}
+
+function exitDemo() {
+  demoActive = false;
+  clearDemoTimers();
+
+  // Hide badge + exit button, restore demo start button
+  demoBadge.classList.remove('visible');
+  btnDemo.style.display     = '';
+  btnExitDemo.style.display = 'none';
+
+  // Reset all UI state
+  isFlashing   = false;
+  espLoader    = null;
+  transport    = null;
+  serialPort   = null;
+
+  setConnected(false);
+  clearLog();
+
+  progressWrap.style.opacity = '0.3';
+  progressBar.style.width    = '0%';
+  progressPct.textContent    = '0%';
+  progressBytes.textContent  = '';
+  progressLabel.textContent  = 'Ready';
+  flashStatus.className      = 'flash-status';
+
+  btnFlash.innerHTML = '▶ Flash Firmware';
+
+  addLog('> [DEMO] Demo mode exited. Connect a real device to continue.', true, 'sys');
 }
 
 // ── esptool-js not loaded fallback ──
