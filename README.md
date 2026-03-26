@@ -2,7 +2,11 @@
 
 **Flash ESP32 firmware from your browser. No drivers. No Python. No command line.**
 
+## Demo
+
 ![Demo](demo.gif)
+
+> No ESP32 handy? Click **▶ Demo** on the [live page](https://mjflanigan5.github.io/esp32-flasher/) to simulate a full chip detect and flash sequence in your browser.
 
 > A browser-based ESP32 firmware flashing tool powered by the [WebSerial API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API) and [esptool-js](https://github.com/espressif/esptool-js). Works entirely in-browser — connect your ESP32 via USB, pick a `.bin` file, and flash.
 
